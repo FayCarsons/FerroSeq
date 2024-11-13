@@ -22,7 +22,7 @@ impl<State> Metro<State> {
     }
 
     fn is_ready(&self) -> bool {
-        Instant::now() >= (self.last_execution + self.interval)
+        Instant::now() >= self.last_execution + self.interval
     }
 
     pub fn forever<Tick, HandleEvent>(mut self, mut tick: Tick, mut handle_event: HandleEvent)

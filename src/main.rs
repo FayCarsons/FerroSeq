@@ -8,7 +8,7 @@ use monome::{KeyDirection, Monome, MonomeDevice, MonomeDeviceType, MonomeEvent};
 use sampler::{Direction, Sampler, Step, StepBuilder};
 use std::{ops::RangeBounds, path::Path, sync::mpsc::Sender};
 
-const DEFAULT_BPM: u32 = 162;
+const DEFAULT_BPM: u32 = 172;
 const PAGES: usize = 2;
 const DEFAULT_PAGE: usize = 0;
 const SEQUENCE_LEN: usize = GRID_WIDTH * PAGES;
