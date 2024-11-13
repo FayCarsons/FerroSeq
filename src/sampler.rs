@@ -1,7 +1,19 @@
 use std::{f32::consts::PI, sync::mpsc::Receiver};
 
+use crate::destruction;
+
 const DEFAULT_SAMPLE_RATE: usize = 48_000;
 const DEFAULT_SLICES: usize = 16;
+
+const DISTORTION_PARAMS: destruction::Params = destruction::Params {
+    pregain: 16.,
+    postgain: 1.,
+    bit_depth: 32,
+    downsample_factor: 4,
+    resolution: 32.,
+    noise_amount: 0.5,
+    feedback: 0.6,
+};
 
 pub trait Window {
     fn window(phase: f32, size: usize) -> f32;
@@ -104,6 +116,7 @@ pub struct Sampler {
     start: f32,
     end: f32,
     direction: Direction,
+    distortion: destruction::Destruction,
     channel: Receiver<Step>,
 }
 
@@ -142,6 +155,7 @@ impl Sampler {
             speed: 1.,
             start: 0.,
             end,
+            distortion: destruction::Destruction::default(),
             direction: Direction::Forward,
             channel,
         }
@@ -200,7 +214,8 @@ impl Sampler {
     }
 
     pub fn set_sample_rate(&mut self, sample_rate: usize) {
-        self.sample_rate = sample_rate
+        self.sample_rate = sample_rate;
+        self.distortion.set_sample_rate(sample_rate)
     }
 
     fn advance(&mut self) {
@@ -233,6 +248,10 @@ impl Sampler {
         }
     }
 
+    fn process_effects(&mut self, sample: f32) -> f32 {
+        destruction::Destruction::tick(&mut self.distortion, sample, DISTORTION_PARAMS)
+    }
+
     pub fn tick(&mut self) -> f32 {
         self.handle_message();
 
@@ -240,7 +259,7 @@ impl Sampler {
             self.advance();
             let sample = self.interpolate();
             self.slice_ended();
-            sample
+            self.process_effects(sample)
         } else {
             0.
         }

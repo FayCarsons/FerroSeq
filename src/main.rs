@@ -1,4 +1,5 @@
 mod decode;
+mod destruction;
 mod metro;
 mod sampler;
 mod stream;
@@ -6,7 +7,7 @@ use cpal::traits::StreamTrait;
 use metro::Metro;
 use monome::{KeyDirection, Monome, MonomeDevice, MonomeDeviceType, MonomeEvent};
 use sampler::{Direction, Sampler, Step, StepBuilder};
-use std::{ops::RangeBounds, path::Path, sync::mpsc::Sender};
+use std::{path::Path, sync::mpsc::Sender};
 
 const DEFAULT_BPM: u32 = 172;
 const PAGES: usize = 2;
@@ -268,6 +269,7 @@ impl App {
                                         self.screen = Screen::Sequencer(selected_page)
                                     }
                                     SequencerWidget::Pattern(step) => {
+                                        self.write_page(page);
                                         let step_builder = self.sequence[step + page * GRID_WIDTH]
                                             .and_then(|s| match s {
                                                 Step::On(current_step) => Some(current_step),
