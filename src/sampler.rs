@@ -1,6 +1,6 @@
-use std::{f32::consts::PI, sync::mpsc::Receiver};
+use std::{f32::consts::TAU, sync::mpsc::Receiver};
 
-use crate::destruction;
+use super::destruction;
 
 const DEFAULT_SAMPLE_RATE: usize = 48_000;
 const DEFAULT_SLICES: usize = 16;
@@ -15,17 +15,11 @@ const DISTORTION_PARAMS: destruction::Params = destruction::Params {
     feedback: 0.6,
 };
 
-pub trait Window {
-    fn window(phase: f32, size: usize) -> f32;
-}
-
-pub struct Hanning;
-
-impl Window for Hanning {
-    fn window(phase: f32, size: usize) -> f32 {
-        let x = (2. * PI * phase) / size as f32;
-        0.5 * (1. - x.cos())
-    }
+// I'm going to need this for retrigger
+#[allow(unused)]
+fn hanning(phase: f32, size: usize) -> f32 {
+    let x = (TAU * phase) / size as f32;
+    0.5 * (1. - x.cos())
 }
 
 fn lerp(fst: f32, snd: f32, t: f32) -> f32 {
@@ -49,6 +43,7 @@ impl Default for StepBuilder {
     }
 }
 
+#[allow(unused)]
 impl StepBuilder {
     pub fn slice(&self) -> usize {
         self.slice
@@ -87,18 +82,6 @@ impl Default for Step {
     }
 }
 
-impl Step {
-    pub fn map<F>(self, f: F) -> Self
-    where
-        F: Fn(StepBuilder) -> StepBuilder,
-    {
-        match self {
-            Self::On(step) => Self::On(f(step)),
-            Self::Off => Self::Off,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum Direction {
     Forward,
@@ -120,18 +103,11 @@ pub struct Sampler {
     channel: Receiver<Step>,
 }
 
-fn wrapf(n: f32, lo: f32, hi: f32) -> f32 {
-    if n >= hi {
-        lo
-    } else if n < lo {
-        hi
-    } else {
-        n
-    }
-}
-
-fn wrapu(n: usize, lo: usize, hi: usize) -> usize {
-    if n >= hi {
+fn wrap<T>(n: T, lo: T, hi: T) -> T
+where
+    T: PartialOrd,
+{
+    if n > hi {
         lo
     } else if n < lo {
         hi
@@ -162,25 +138,17 @@ impl Sampler {
     }
 
     fn interpolate(&self) -> f32 {
-        let fst = wrapu(
+        let fst = wrap(
             self.pos.floor() as usize,
             self.start as usize,
-            self.end as usize,
+            self.end as usize - 1,
         );
         let snd = match self.direction {
-            Direction::Forward => wrapu(fst + 1, self.start as usize, self.end as usize),
-            Direction::Backward => wrapu(fst - 1, self.start as usize, self.end as usize),
+            Direction::Forward => wrap(fst + 1, self.start as usize, self.end as usize - 1),
+            Direction::Backward => wrap(fst - 1, self.start as usize, self.end as usize - 1),
         };
         let frac = self.pos.fract();
         lerp(self.samples[fst], self.samples[snd], frac).tanh()
-    }
-
-    fn wrap_playhead(&mut self) {
-        if self.pos >= self.end {
-            self.pos = self.start
-        } else if self.pos < self.start {
-            self.pos = self.end - 1.
-        }
     }
 
     fn handle_message(&mut self) {
@@ -228,7 +196,7 @@ impl Sampler {
             }
         }
 
-        self.wrap_playhead();
+        self.pos = wrap(self.pos, self.start, self.end - 1.);
     }
 
     fn slice_ended(&mut self) {

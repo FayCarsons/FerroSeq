@@ -181,7 +181,7 @@ impl App {
                         } => {
                             if let Some(widget) = StepEditorWidget::hit(x as usize, y as usize) {
                                 match widget {
-                                    StepEditorWidget::SliceSelect(slice) => {
+                                    StepEditorWidget::SliceSelect(_) => {
                                         self.screen.set_step(step_builder.with_slice(x as usize));
                                         widget.render(&mut self.pages.step_edit, true);
                                     }

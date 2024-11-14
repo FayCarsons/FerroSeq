@@ -39,7 +39,7 @@ impl Layout for StepEditorWidget {
         use StepEditorWidget::*;
 
         if y == 0 && (0..GRID_WIDTH).contains(&x) {
-            Some(SliceSelect(x as usize))
+            Some(SliceSelect(x))
         } else if y == 1 {
             if (0..2).contains(&x) {
                 Some(Backward)
