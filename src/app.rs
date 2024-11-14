@@ -4,7 +4,7 @@ use super::{
     widgets::{Layout, Page, SequencerWidget, StepEditorWidget},
 };
 use monome::{KeyDirection, Monome, MonomeDevice, MonomeDeviceType, MonomeEvent};
-use std::sync::mpsc::Sender;
+use std::{collections::HashSet, sync::mpsc::Sender};
 
 use super::common::*;
 
@@ -15,10 +15,12 @@ struct Pages {
 
 pub struct App {
     grid: Monome,
-    screen: Screen,
+    current_page: Screen,
     pages: Pages,
-    current_index: usize,
-    sequence: [Option<Step>; SEQUENCE_LEN],
+    pressed: HashSet<usize>,
+    step_index: usize,
+    num_patterns: usize,
+    sequence: Vec<Option<Step>>,
     sender: Sender<Step>,
 }
 
@@ -39,28 +41,30 @@ impl App {
         let step_edit = Page::new();
         let mut this = App {
             grid,
-            screen: Screen::Sequencer(DEFAULT_PAGE),
+            current_page: Screen::Sequencer(DEFAULT_PATTERN),
             pages: Pages {
                 sequencer,
                 step_edit,
             },
-            current_index: 0,
+            pressed: HashSet::with_capacity(16),
+            step_index: 0,
             sender,
-            sequence: [None; SEQUENCE_LEN],
+            num_patterns: DEFAULT_NUM_PATTERNS,
+            sequence: vec![None; SEQUENCE_LEN],
         };
 
         for x in 0..16 {
             SequencerWidget::Pattern(x).render(&mut this.pages.sequencer, false);
         }
 
-        for x in 0..PAGES {
-            SequencerWidget::PageSelect(x).render(&mut this.pages.sequencer, x == DEFAULT_PAGE)
+        for x in 0..DEFAULT_NUM_PATTERNS {
+            this.pages.sequencer.framebuffer[x] = OFF;
         }
 
         Ok(this)
     }
 
-    fn write_page(&mut self, page: usize) {
+    fn write_pattern(&mut self, page: usize) {
         for x in 0..GRID_WIDTH {
             SequencerWidget::Pattern(x).render(
                 &mut self.pages.sequencer,
@@ -70,28 +74,32 @@ impl App {
     }
 
     fn tick(&mut self) {
-        if let Some(step) = self.sequence[self.current_index] {
+        if let Some(step) = self.sequence[self.step_index] {
             self.sender.send(step).unwrap()
         }
 
-        match self.screen {
+        match self.current_page {
             Screen::Sequencer(page) => {
                 // First handle clearing the current step marker
-                let current_page = self.current_index / GRID_WIDTH;
+                let current_page = self.step_index / GRID_WIDTH;
+
                 if current_page == page {
-                    let step_x = self.current_index % GRID_WIDTH;
+                    let step_x = self.step_index % GRID_WIDTH;
+
                     // Just restore this step's state based on whether it has a note
-                    let has_note = self.sequence[self.current_index].is_some();
-                    SequencerWidget::Pattern(step_x).render(&mut self.pages.sequencer, has_note)
+                    SequencerWidget::Pattern(step_x).render(
+                        &mut self.pages.sequencer,
+                        self.sequence[self.step_index].is_some(),
+                    )
                 }
 
                 // Advance to next step
-                self.current_index = (self.current_index + 1) % SEQUENCE_LEN;
+                self.step_index = (self.step_index + 1) % self.sequence.len();
 
-                // If new step is on current page, highlight it
-                let new_page = self.current_index / GRID_WIDTH;
+                // If new step is on current page, render the cursor
+                let new_page = self.step_index / GRID_WIDTH;
                 if new_page == page {
-                    SequencerWidget::Pattern(self.current_index % GRID_WIDTH)
+                    SequencerWidget::Pattern(self.step_index % GRID_WIDTH)
                         .render(&mut self.pages.sequencer, true)
                 }
 
@@ -99,7 +107,7 @@ impl App {
             }
 
             Screen::StepEdit { .. } => {
-                self.current_index = (self.current_index + 1) % SEQUENCE_LEN;
+                self.step_index = (self.step_index + 1) % self.sequence.len();
                 self.pages.step_edit.render(&mut self.grid)
             }
         }
@@ -108,7 +116,7 @@ impl App {
     fn handle_event(&mut self) -> bool {
         match self.grid.poll() {
             Some(event) => {
-                match self.screen {
+                match self.current_page {
                     Screen::Sequencer(page) => match event {
                         MonomeEvent::GridKey {
                             x,
@@ -117,13 +125,12 @@ impl App {
                         } => {
                             if let Some(widget) = SequencerWidget::hit(x as usize, y as usize) {
                                 match widget {
-                                    SequencerWidget::PageSelect(selected_page) => {
-                                        self.write_page(selected_page);
+                                    SequencerWidget::PatternSelect(selected_page) => {
+                                        self.pressed.insert(selected_page);
                                         widget.render(&mut self.pages.sequencer, true);
-                                        self.screen = Screen::Sequencer(selected_page)
                                     }
                                     SequencerWidget::Pattern(step) => {
-                                        self.write_page(page);
+                                        self.write_pattern(page);
                                         let step_builder = self.sequence[step + page * GRID_WIDTH]
                                             .and_then(|s| match s {
                                                 Step::On(current_step) => Some(current_step),
@@ -131,7 +138,7 @@ impl App {
                                             })
                                             .unwrap_or_default();
 
-                                        self.screen = Screen::StepEdit {
+                                        self.current_page = Screen::StepEdit {
                                             page,
                                             step,
                                             step_builder,
@@ -159,12 +166,30 @@ impl App {
                             x,
                             y,
                             direction: KeyDirection::Up,
-                        } if matches!(
-                            SequencerWidget::hit(x as usize, y as usize),
-                            Some(SequencerWidget::PageSelect(_)),
-                        ) =>
-                        {
-                            self.write_page(page)
+                        } => {
+                            if let Some(SequencerWidget::PatternSelect(pattern)) =
+                                SequencerWidget::hit(x as usize, y as usize)
+                            {
+                                self.pressed.remove(&pattern);
+                                println!("Pressed: {:?}", self.pressed);
+                                if self.pressed.is_empty() {
+                                    if pattern < self.num_patterns {
+                                        self.write_pattern(pattern);
+                                        self.current_page = Screen::Sequencer(pattern)
+                                    }
+                                } else if self.pressed.contains(&0) {
+                                    println!("Hit pattern select: {:?}", pattern);
+
+                                    let added_len =
+                                        (pattern + 1) * GRID_WIDTH - self.sequence.len();
+                                    println!("Length being added: {:?}", added_len);
+
+                                    self.num_patterns = pattern + 1;
+                                    self.sequence
+                                        .extend(std::iter::repeat(None).take(added_len));
+                                    self.write_pattern(pattern)
+                                }
+                            }
                         }
                         _ => (),
                     },
@@ -182,18 +207,19 @@ impl App {
                             if let Some(widget) = StepEditorWidget::hit(x as usize, y as usize) {
                                 match widget {
                                     StepEditorWidget::SliceSelect(_) => {
-                                        self.screen.set_step(step_builder.with_slice(x as usize));
+                                        self.current_page
+                                            .set_step(step_builder.with_slice(x as usize));
                                         widget.render(&mut self.pages.step_edit, true);
                                     }
                                     StepEditorWidget::CurrentStep(_) => unreachable!(),
                                     StepEditorWidget::Backward => {
-                                        self.screen.set_step(
+                                        self.current_page.set_step(
                                             step_builder.with_direction(Direction::Backward),
                                         );
                                         widget.render(&mut self.pages.step_edit, true);
                                     }
                                     StepEditorWidget::Forward => {
-                                        self.screen.set_step(
+                                        self.current_page.set_step(
                                             step_builder.with_direction(Direction::Forward),
                                         );
                                         widget.render(&mut self.pages.step_edit, true);
@@ -217,8 +243,8 @@ impl App {
                                 StepEditorWidget::CurrentStep(step)
                                     .render(&mut self.pages.step_edit, false);
 
-                                self.screen = Screen::Sequencer(page);
-                                self.write_page(page);
+                                self.current_page = Screen::Sequencer(page);
+                                self.write_pattern(page);
                             }
                         }
 

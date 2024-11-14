@@ -6,13 +6,13 @@ const DEFAULT_SAMPLE_RATE: usize = 48_000;
 const DEFAULT_SLICES: usize = 16;
 
 const DISTORTION_PARAMS: destruction::Params = destruction::Params {
-    pregain: 16.,
+    pregain: 8.,
     postgain: 1.,
     bit_depth: 32,
-    downsample_factor: 4,
+    downsample_factor: 2,
     resolution: 32.,
-    noise_amount: 0.5,
-    feedback: 0.6,
+    noise_amount: 0.1,
+    feedback: 0.1,
 };
 
 // I'm going to need this for retrigger
@@ -43,7 +43,6 @@ impl Default for StepBuilder {
     }
 }
 
-#[allow(unused)]
 impl StepBuilder {
     pub fn slice(&self) -> usize {
         self.slice

@@ -6,7 +6,7 @@ pub trait Layout: Sized {
 }
 
 pub struct Page {
-    framebuffer: [u8; GRID_SIZE],
+    pub framebuffer: [u8; GRID_SIZE],
 }
 
 impl Page {
@@ -73,13 +73,13 @@ impl Layout for StepEditorWidget {
 
 pub enum SequencerWidget {
     Pattern(usize),
-    PageSelect(usize),
+    PatternSelect(usize),
 }
 
 impl Layout for SequencerWidget {
     fn hit(x: usize, y: usize) -> Option<Self> {
-        if y == 0 && x < 4 {
-            Some(SequencerWidget::PageSelect(x))
+        if y == 0 {
+            Some(SequencerWidget::PatternSelect(x))
         } else if (4 * GRID_WIDTH..128).contains(&to_1d(x, y)) {
             Some(SequencerWidget::Pattern(x))
         } else {
@@ -102,13 +102,9 @@ impl Layout for SequencerWidget {
 
                 page.write_column(*step, level)
             }
-            PageSelect(current_page) => {
-                for i in 0..PAGES {
-                    if i == *current_page {
-                        page.framebuffer[i] = ON;
-                    } else {
-                        page.framebuffer[i] = OFF;
-                    }
+            PatternSelect(pattern) => {
+                for i in 0..*pattern + 1 {
+                    page.framebuffer[i] = if i == *pattern { ON } else { OFF }
                 }
             }
         }
