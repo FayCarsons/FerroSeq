@@ -6,7 +6,7 @@ const DEFAULT_SAMPLE_RATE: usize = 48_000;
 const DEFAULT_SLICES: usize = 16;
 
 const DISTORTION_PARAMS: destruction::Params = destruction::Params {
-    pregain: 8.,
+    pregain: 4.,
     postgain: 1.,
     bit_depth: 32,
     downsample_factor: 2,

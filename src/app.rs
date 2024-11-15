@@ -54,12 +54,14 @@ impl App {
         };
 
         for x in 0..16 {
-            SequencerWidget::Pattern(x).render(&mut this.pages.sequencer, false);
+            SequencerWidget::Pattern(x).render(&mut this.pages.sequencer, false, this.num_patterns);
         }
 
         for x in 0..DEFAULT_NUM_PATTERNS {
             this.pages.sequencer.framebuffer[x] = OFF;
         }
+
+        this.pages.sequencer.framebuffer[0] = ON;
 
         Ok(this)
     }
@@ -69,6 +71,7 @@ impl App {
             SequencerWidget::Pattern(x).render(
                 &mut self.pages.sequencer,
                 self.sequence[x + page * GRID_WIDTH].is_some(),
+                self.num_patterns,
             )
         }
     }
@@ -90,6 +93,7 @@ impl App {
                     SequencerWidget::Pattern(step_x).render(
                         &mut self.pages.sequencer,
                         self.sequence[self.step_index].is_some(),
+                        self.num_patterns,
                     )
                 }
 
@@ -99,8 +103,11 @@ impl App {
                 // If new step is on current page, render the cursor
                 let new_page = self.step_index / GRID_WIDTH;
                 if new_page == page {
-                    SequencerWidget::Pattern(self.step_index % GRID_WIDTH)
-                        .render(&mut self.pages.sequencer, true)
+                    SequencerWidget::Pattern(self.step_index % GRID_WIDTH).render(
+                        &mut self.pages.sequencer,
+                        true,
+                        self.num_patterns,
+                    )
                 }
 
                 self.pages.sequencer.render(&mut self.grid);
@@ -127,7 +134,11 @@ impl App {
                                 match widget {
                                     SequencerWidget::PatternSelect(selected_page) => {
                                         self.pressed.insert(selected_page);
-                                        widget.render(&mut self.pages.sequencer, true);
+                                        widget.render(
+                                            &mut self.pages.sequencer,
+                                            true,
+                                            self.num_patterns,
+                                        );
                                     }
                                     SequencerWidget::Pattern(step) => {
                                         self.write_pattern(page);
@@ -144,8 +155,11 @@ impl App {
                                             step_builder,
                                         };
 
-                                        StepEditorWidget::SliceSelect(step_builder.slice())
-                                            .render(&mut self.pages.step_edit, true);
+                                        StepEditorWidget::SliceSelect(step_builder.slice()).render(
+                                            &mut self.pages.step_edit,
+                                            true,
+                                            (),
+                                        );
 
                                         let dir =
                                             if let Direction::Forward = step_builder.direction() {
@@ -153,10 +167,13 @@ impl App {
                                             } else {
                                                 StepEditorWidget::Backward
                                             };
-                                        dir.render(&mut self.pages.step_edit, true);
+                                        dir.render(&mut self.pages.step_edit, true, ());
 
-                                        StepEditorWidget::CurrentStep(x as usize)
-                                            .render(&mut self.pages.step_edit, true);
+                                        StepEditorWidget::CurrentStep(x as usize).render(
+                                            &mut self.pages.step_edit,
+                                            true,
+                                            (),
+                                        );
                                     }
                                 }
                             }
@@ -167,14 +184,18 @@ impl App {
                             y,
                             direction: KeyDirection::Up,
                         } => {
-                            if let Some(SequencerWidget::PatternSelect(pattern)) =
+                            if let Some(widget @ SequencerWidget::PatternSelect(pattern)) =
                                 SequencerWidget::hit(x as usize, y as usize)
                             {
                                 self.pressed.remove(&pattern);
-                                println!("Pressed: {:?}", self.pressed);
                                 if self.pressed.is_empty() {
                                     if pattern < self.num_patterns {
                                         self.write_pattern(pattern);
+                                        widget.render(
+                                            &mut self.pages.sequencer,
+                                            true,
+                                            self.num_patterns,
+                                        );
                                         self.current_page = Screen::Sequencer(pattern)
                                     }
                                 } else if self.pressed.contains(&0) {
@@ -209,20 +230,20 @@ impl App {
                                     StepEditorWidget::SliceSelect(_) => {
                                         self.current_page
                                             .set_step(step_builder.with_slice(x as usize));
-                                        widget.render(&mut self.pages.step_edit, true);
+                                        widget.render(&mut self.pages.step_edit, true, ());
                                     }
                                     StepEditorWidget::CurrentStep(_) => unreachable!(),
                                     StepEditorWidget::Backward => {
                                         self.current_page.set_step(
                                             step_builder.with_direction(Direction::Backward),
                                         );
-                                        widget.render(&mut self.pages.step_edit, true);
+                                        widget.render(&mut self.pages.step_edit, true, ());
                                     }
                                     StepEditorWidget::Forward => {
                                         self.current_page.set_step(
                                             step_builder.with_direction(Direction::Forward),
                                         );
-                                        widget.render(&mut self.pages.step_edit, true);
+                                        widget.render(&mut self.pages.step_edit, true, ());
                                     }
                                 }
                             }
@@ -240,8 +261,11 @@ impl App {
                                 self.sequence[step + page * GRID_WIDTH] =
                                     Some(Step::On(step_builder));
 
-                                StepEditorWidget::CurrentStep(step)
-                                    .render(&mut self.pages.step_edit, false);
+                                StepEditorWidget::CurrentStep(step).render(
+                                    &mut self.pages.step_edit,
+                                    false,
+                                    (),
+                                );
 
                                 self.current_page = Screen::Sequencer(page);
                                 self.write_pattern(page);

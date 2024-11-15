@@ -1,8 +1,10 @@
 use super::common::*;
 
 pub trait Layout: Sized {
+    type Context;
+
     fn hit(x: usize, y: usize) -> Option<Self>;
-    fn render(&self, buffer: &mut Page, on: bool);
+    fn render(&self, buffer: &mut Page, on: bool, ctx: Self::Context);
 }
 
 pub struct Page {
@@ -35,6 +37,8 @@ pub enum StepEditorWidget {
 }
 
 impl Layout for StepEditorWidget {
+    type Context = ();
+
     fn hit(x: usize, y: usize) -> Option<Self> {
         use StepEditorWidget::*;
 
@@ -53,7 +57,7 @@ impl Layout for StepEditorWidget {
         }
     }
 
-    fn render(&self, page: &mut Page, on: bool) {
+    fn render(&self, page: &mut Page, on: bool, _: Self::Context) {
         use StepEditorWidget::*;
         match self {
             SliceSelect(index) => (0..GRID_WIDTH)
@@ -77,6 +81,7 @@ pub enum SequencerWidget {
 }
 
 impl Layout for SequencerWidget {
+    type Context = usize;
     fn hit(x: usize, y: usize) -> Option<Self> {
         if y == 0 {
             Some(SequencerWidget::PatternSelect(x))
@@ -87,7 +92,7 @@ impl Layout for SequencerWidget {
         }
     }
 
-    fn render(&self, page: &mut Page, on: bool) {
+    fn render(&self, page: &mut Page, on: bool, num_patterns: Self::Context) {
         use SequencerWidget::*;
 
         match self {
@@ -103,8 +108,10 @@ impl Layout for SequencerWidget {
                 page.write_column(*step, level)
             }
             PatternSelect(pattern) => {
-                for i in 0..*pattern + 1 {
-                    page.framebuffer[i] = if i == *pattern { ON } else { OFF }
+                if *pattern < num_patterns {
+                    for i in 0..num_patterns {
+                        page.framebuffer[i] = if i == *pattern { ON } else { OFF }
+                    }
                 }
             }
         }
