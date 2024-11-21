@@ -5,6 +5,10 @@ Includes a sampler engine with slicing (currently constant # of slices), reverse
 The goal is to enable writing breakcore in an immediate, tactile way - mostly for fun.
 The entire project is pure Rust and a goal is to keep it that way.
 
+## Demo
+You can find a short demonstration of the app [here](https://x.com/fay_carsons/status/1857574938527543470).
+An annotated demo/tutorial should be available soon :3
+
 ## Future features
 Basic QOL, deleting steps, per-step control over pitch.
 Renoise-style timestretch/retrigger
